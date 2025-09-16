@@ -1,0 +1,123 @@
+<div class="container" (click)="closeMenu()">
+  <nav class="navbar">
+    <h2 class="navbar-title">SmartDocs</h2>
+    <button class="logoutbtn" (click)="logout()">Logout</button>
+  </nav>
+
+  <input #fileInput type="file" accept="application/pdf" (change)="onFileSelected($event)" multiple style="display:none" />
+
+  <div class="controls">
+    <button (click)="triggerFileInput()">Select PDF(s)</button>
+    <div *ngIf="selectedFiles && selectedFiles.length > 0" class="selected-files">
+      <p>Selected Files:</p>
+      <ul>
+        <li *ngFor="let file of selectedFiles">
+          {{ file.name }}
+        </li>
+      </ul>
+    </div>
+    <button (click)="uploadFiles()">Upload</button>
+  </div>
+
+  <p *ngIf="uploadMessage" class="message">{{ uploadMessage }}</p>
+
+  <div class="main-content" style="display: flex; gap: 20px; margin-top: 20px;">
+    <div class="sidebar" [class.closed]="!sidebarOpen">
+      <h3>Documents</h3>
+      <ul>
+        <li *ngFor="let session of chatSessions" [class.selected]="selectedChatSessionId === session._id" (click)="selectChatSession(session._id)">
+          <div class="session-header">
+            <button *ngIf="session.documentCount > 1"
+                    class="dropdown-btn"
+                    (click)="toggleSessionExpansion(session._id); $event.stopPropagation()">
+              {{ expandedSessions.has(session._id) ? '▼' : '▶' }}
+            </button>
+            <span>
+              <ng-container *ngIf="session.documentCount === 1; else multipleDocs">
+                {{ session.documentNames[0] }}
+              </ng-container>
+              <ng-template #multipleDocs>
+                Chat with {{ session.documentCount }} documents
+              </ng-template>
+            </span>
+
+            <!-- Three dots menu button -->
+            <button class="menu-btn" (click)="toggleMenu(session._id, $event)" title="Options">⋯</button>
+
+            <!-- Popup menu -->
+            <div *ngIf="openMenuSessionId === session._id" class="menu-popup" (click)="$event.stopPropagation()">
+              <button class="menu-item" (click)="archiveSession(session._id)">
+                <span class="icon">📌</span>
+                {{ session.archived ? 'Unarchive' : 'Archive' }}
+              </button>
+              <button class="menu-item delete" (click)="deleteSession(session._id)">
+                <span class="icon">🗑️</span>
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <ul *ngIf="session.documentCount > 1 && expandedSessions.has(session._id)" class="document-list">
+            <li *ngFor="let doc of session.documents">
+              {{ doc.originalName }}
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <p class="sidebar-toggle-btn" (click)="toggleSidebar()">
+      {{ sidebarOpen ? '‹' : '›' }}
+    </p>
+
+    <div class="chat-area" [class.expanded]="!sidebarOpen">
+      <ng-container *ngIf="selectedChatSessionId; else noSelection">
+        <h3>{{ selectedChatSessionName || 'Unknown Session' }}</h3>
+        <div class="chat-history">
+          <div *ngFor="let chat of chatHistories[selectedChatSessionId]; let i = index" class="chat-message">
+            <p><strong>You:</strong> {{ chat.question }}</p>
+            <p><strong>AI:</strong></p>
+            <div class="ai-response" [innerHTML]="sanitizeAndFormatAnswer(chat.answer)"></div>
+        
+            <div class="chat-icons">
+              <button class="icon-btn"
+                      [class.active]="chat.rating === 'up'"
+                      (click)="rateAnswer(i, 'up')"
+                      title="Thumbs Up">👍</button>
+            
+              <button class="icon-btn"
+                      [class.active]="chat.rating === 'down'"
+                      (click)="rateAnswer(i, 'down')"
+                      title="Thumbs Down">👎</button>
+            
+              <button class="icon-btn"
+                      (click)="copyAnswer(chat.answer)"
+                      title="Copy Answer">📋</button>
+            </div>
+            <hr />
+          </div>
+        
+          <!-- Copy and Export buttons for entire chat -->
+          <button class="icon-btn" (click)="exportChat()" title="Export Chat as PDF">📄</button>
+          <div *ngIf="loadingAnswer" class="loader-container">
+            <div class="loader"></div>
+            <p>Loading response...</p>
+          </div>
+        
+         
+        
+          <p *ngIf="!chatHistories[selectedChatSessionId]?.length && !loadingAnswer">Ask a question!</p>
+        </div>
+       
+        <div class="chat-input">
+          <input type="text" [(ngModel)]="question" placeholder="Ask a question" />
+          <button (click)="askQuestion()" [disabled]="loadingAnswer || !question.trim()">Ask</button>
+        </div>
+      </ng-container>
+      <ng-template #noSelection>
+        <p>Please select a document from the sidebar to start chatting.</p>
+      </ng-template>
+    </div>
+    
+  </div>
+</div>

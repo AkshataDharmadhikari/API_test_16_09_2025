@@ -1,0 +1,20 @@
+<div class="auth-container">
+  <div class="card">
+    <h2>Create account</h2>
+    <p class="sub">Join to get started</p>
+    <form (ngSubmit)="submit()" #f="ngForm" class="form">
+      <label>Email</label>
+      <input name="email" [(ngModel)]="email" type="email" required placeholder="you@example.com" />
+
+      <label>Username</label>
+      <input name="username" [(ngModel)]="username" required placeholder="Choose a username" />
+
+      <label>Password</label>
+      <input name="password" [(ngModel)]="password" type="password" required placeholder="Create a password" />
+
+      <button type="submit" [disabled]="!f.form.valid">Register</button>
+    </form>
+    <div class="message" [class.error]="message() && !message().startsWith('Registered')">{{ message() }}</div>
+    <p class="muted">Already have an account? <a routerLink="/login">Login</a></p>
+  </div>
+</div>

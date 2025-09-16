@@ -1,0 +1,8 @@
+{
+    "watch": ["routes", "middleware", "models", "server.js"],
+    "ignore": [
+      "node_modules/**",
+      "node_modules/pdf-parse/test/**"
+    ]
+  }
+  
