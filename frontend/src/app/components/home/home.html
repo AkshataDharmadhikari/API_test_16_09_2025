@@ -17,6 +17,7 @@
       </ul>
     </div>
     <button (click)="uploadFiles()">Upload</button>
+    <button (click)="goToDocuments()">List of Documents</button>
   </div>
 
   <p *ngIf="uploadMessage" class="message">{{ uploadMessage }}</p>
@@ -73,11 +74,32 @@
     <div class="chat-area" [class.expanded]="!sidebarOpen">
       <ng-container *ngIf="selectedChatSessionId; else noSelection">
         <h3>{{ selectedChatSessionName || 'Unknown Session' }}</h3>
+        <div class="chat-search" style="margin-bottom: 10px;">
+          <input
+            type="text"
+            placeholder="Type keyword and press Enter to search"
+            [(ngModel)]="searchKeyword"
+            (keydown)="onSearchKeydown($event)"
+            style="width: 100%; padding: 6px; font-size: 14px;"
+          />
+          <button
+          class="search-icon-btn"
+          (click)="onSearchIconClick()"
+          title="Search"
+          type="button"
+          aria-label="Search"
+        >
+          🔍
+        </button>
+          <p *ngIf="highlightKeyword">
+            Matches found: {{ totalMatches }}
+          </p>
+        </div>
         <div class="chat-history">
           <div *ngFor="let chat of chatHistories[selectedChatSessionId]; let i = index" class="chat-message">
             <p><strong>You:</strong> {{ chat.question }}</p>
             <p><strong>AI:</strong></p>
-            <div class="ai-response" [innerHTML]="sanitizeAndFormatAnswer(chat.answer)"></div>
+            <div class="ai-response" [innerHTML]="sanitizeAndFormatAnswer(chat.answer, highlightKeyword)"></div>
         
             <div class="chat-icons">
               <button class="icon-btn"
@@ -105,7 +127,6 @@
           </div>
         
          
-        
           <p *ngIf="!chatHistories[selectedChatSessionId]?.length && !loadingAnswer">Ask a question!</p>
         </div>
        

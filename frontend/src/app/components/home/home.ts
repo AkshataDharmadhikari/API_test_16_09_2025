@@ -1,8 +1,9 @@
 import { CommonModule, NgIf } from '@angular/common';
+import { signal } from '@angular/core';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { Component, ElementRef, inject, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 @Component({
@@ -33,7 +34,6 @@ export class Home {
   question = '';
   loadingAnswer = false;
 
-  // Updated chatHistories to include optional rating per message
   chatHistories: { [chatSessionId: string]: { question: string; answer: string; rating?: 'up' | 'down' | null }[] } = {};
 
   sidebarOpen = true;
@@ -41,46 +41,83 @@ export class Home {
 
   openMenuSessionId: string | null = null;
 
+  // New properties for search functionality
+  searchKeyword = '';
+  totalMatches = 0;
+  // Internal keyword used for highlighting (updated on Enter)
+  highlightKeyword = '';
+  
+
   constructor(private sanitizer: DomSanitizer) {}
 
   ngOnInit() {
     this.loadChatSessions();
   }
 
+  goToDocuments() {
+    this.router.navigateByUrl('/documents');
+  }
+
   sanitizeHtml(html: string): SafeHtml {
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
-  sanitizeAndFormatAnswer(rawAnswer: string): SafeHtml {
+   // Called on keydown in search input
+   onSearchKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.highlightKeyword = this.searchKeyword.trim();
+      this.updateMatchCount();
+    }
+  }
+
+  
+  onSearchIconClick() {
+    this.highlightKeyword = this.searchKeyword.trim();
+    this.updateMatchCount();
+  }
+  sanitizeAndFormatAnswer(rawAnswer: string, keyword: string = ''): SafeHtml {
     if (!rawAnswer) return '';
 
-    // Basic replacements to convert common patterns into lists
     let formatted = rawAnswer;
-
-    // Convert numbered lists starting with "1." or "1)"
+     // Convert numbered lists starting with "1." or "1)"
     formatted = formatted.replace(/(?:^|\n)(\d+)[\.$$]\s+(.*)/g, (match, num, text) => {
-      return `<li>${text.trim()}</li>`;
+       return `<li>${text.trim()}</li>`;
     });
 
-    // Wrap consecutive <li> into <ol>
+// Wrap consecutive <li> into <ol>
     formatted = formatted.replace(/(<li>.*<\/li>)+/gs, (match) => {
       return `<ol class="custom-ol">${match}</ol>`;
     });
 
-    // Convert bullet points starting with "-", "*", or "•"
+// Convert bullet points starting with "-", "*", or "•"
     formatted = formatted.replace(/(?:^|\n)[\-\•]\s+(.*)/g, (match, text) => {
       return `<li>${text.trim()}</li>`;
     });
 
-    // Wrap consecutive <li> into <ul>
+// Wrap consecutive <li> into <ul>
     formatted = formatted.replace(/(<li>.*<\/li>)+/gs, (match) => {
       return `<ul class="custom-ul">${match}</ul>`;
     });
+    if (keyword.trim()) {
+      const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(${escapedKeyword})`, 'gi');
 
-    // Replace newlines with <br> for paragraphs
+      // Split by HTML tags to avoid breaking tags when highlighting
+      const parts = formatted.split(/(<[^>]+>)/g);
+
+      for (let i = 0; i < parts.length; i++) {
+        if (!parts[i].startsWith('<')) {
+          parts[i] = parts[i].replace(regex, `<span class="highlight">$1</span>`);
+        }
+      }
+
+      formatted = parts.join('');
+    }
+
+    // Replace newlines with <br>
     formatted = formatted.replace(/\n/g, '<br>');
 
-    // Sanitize and return
     return this.sanitizer.bypassSecurityTrustHtml(formatted);
   }
 
@@ -162,6 +199,8 @@ export class Home {
     this.selectedChatSessionId = sessionId;
     this.question = '';
     this.openMenuSessionId = null;
+    this.searchKeyword = '';
+    this.totalMatches = 0;
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -213,6 +252,7 @@ export class Home {
         this.chatHistories[this.selectedChatSessionId!].push({ question: this.question, answer: res.answer, rating: null });
         this.question = '';
         this.loadingAnswer = false;
+        this.updateMatchCount(); // Update match count after new answer
       },
       error: (err) => {
         alert(err?.error?.message || 'Error getting answer');
@@ -299,8 +339,6 @@ export class Home {
     });
   }
 
-  // New methods for rating, copying, exporting
-
   rateAnswer(messageIndex: number, rating: 'up' | 'down'): void {
     if (!this.selectedChatSessionId) return;
 
@@ -311,10 +349,9 @@ export class Home {
       return;
     }
 
-  
     const headers = new HttpHeaders().set('x-auth-token', token);
-    const sessionId = this.selectedChatSessionId; // local non-null variable
-  
+    const sessionId = this.selectedChatSessionId;
+
     this.http.post(
       `http://localhost:4000/api/chat/${sessionId}/rate`,
       { messageIndex, rating },
@@ -350,10 +387,10 @@ export class Home {
     }
 
     const headers = new HttpHeaders().set('x-auth-token', token);
-  
+
     this.http.get(`http://localhost:4000/api/chat/${this.selectedChatSessionId}/export`, {
       headers,
-      responseType: 'blob' // important to get binary data
+      responseType: 'blob'
     }).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
@@ -367,5 +404,29 @@ export class Home {
         alert(err?.error?.message || 'Error exporting PDF');
       }
     });
+  }
+
+  // New method to update match count for search keyword
+  updateMatchCount() {
+    this.totalMatches = 0;
+    if (!this.searchKeyword.trim() || !this.selectedChatSessionId) {
+      return;
+    }
+
+    const chats = this.chatHistories[this.selectedChatSessionId] || [];
+    const keyword = this.searchKeyword.trim().toLowerCase();
+
+    for (const chat of chats) {
+      const answer = chat.answer.toLowerCase();
+      let count = 0;
+      let pos = 0;
+      while (true) {
+        const foundPos = answer.indexOf(keyword, pos);
+        if (foundPos === -1) break;
+        count++;
+        pos = foundPos + keyword.length;
+      }
+      this.totalMatches += count;
+    }
   }
 }
